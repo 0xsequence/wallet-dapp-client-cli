@@ -4,6 +4,7 @@ import './fetch.js'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import http from 'node:http'
+import { execFile } from 'node:child_process'
 
 import { AbiFunction, Address, Secp256k1 } from 'ox'
 import {
@@ -247,6 +248,20 @@ const handleError = (err: unknown): void => {
   process.exitCode = 1
 }
 
+const sendOsNotification = (message: string): void => {
+  if (process.platform !== 'darwin') return
+  if (process.env.DAPP_CLIENT_CLI_NO_OS_NOTIFY) return
+  const script = `display notification ${JSON.stringify(message)} with title "dapp-client-cli"`
+  execFile('osascript', ['-e', script], { timeout: 2000 }, () => {})
+}
+
+const notifyRedirect = (): void => {
+  process.stderr.write('\u0007')
+  const message = 'ACTION REQUIRED: Open the redirect URL above to continue.'
+  console.error(message)
+  sendOsNotification('Open the redirect URL in your terminal output to continue.')
+}
+
 const tryGetExplorerUrl = (chainId: number, txHash: string): string | undefined => {
   try {
     return getExplorerUrl(chainId, txHash)
@@ -399,7 +414,7 @@ const main = async (): Promise<void> => {
     })
     .option('listen', {
       type: 'boolean',
-      default: false,
+      default: true,
       describe: 'Start local redirect listener to auto-resume',
     })
     .option('listen-timeout', {
@@ -574,6 +589,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
@@ -673,7 +689,11 @@ const main = async (): Promise<void> => {
           const stateManager = await prepareState(argv)
           const storage = new FileSequenceStorage(stateManager)
           const sessionStorage = new FileSessionStorage(stateManager)
-          await ensureNoPendingRedirect(storage)
+          if (await storage.isRedirectRequestPending()) {
+            await storage.setPendingRedirectRequest(false)
+            await storage.getAndClearTempSessionPk()
+            await storage.getAndClearPendingRequest()
+          }
           const config = await loadConfig(stateManager, configOverridesFromArgs(argv))
           const client = createClient(config, storage, sessionStorage)
           await client.initialize()
@@ -785,6 +805,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
@@ -854,6 +875,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
@@ -925,6 +947,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
@@ -985,6 +1008,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
@@ -1046,6 +1070,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({
