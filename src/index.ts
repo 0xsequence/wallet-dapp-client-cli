@@ -1091,7 +1091,11 @@ const main = async (): Promise<void> => {
       (builder) =>
         builder
           .option('chain-id', { type: 'number', demandOption: true })
-          .option('transaction', { type: 'string', demandOption: true, describe: 'TransactionRequest JSON or @file' }),
+          .option('transaction', {
+            type: 'string',
+            demandOption: true,
+            describe: 'Transaction JSON or @file (single object or array)',
+          }),
       async (argv) => {
         try {
           const stateManager = await prepareState(argv)
@@ -1108,9 +1112,15 @@ const main = async (): Promise<void> => {
           }
 
           const chainId = Number(argv.chainId)
-          const transaction = normalizeTransactionRequest(
-            await readJsonInput<TransactionRequest>(argv.transaction, 'transaction'),
+          const transactionInput = await readJsonInput<Record<string, unknown> | Record<string, unknown>[]>(
+            argv.transaction,
+            'transaction',
           )
+          const transactionData = Array.isArray(transactionInput) ? transactionInput[0] : transactionInput
+          if (!transactionData) {
+            throw new Error('transaction must include at least one item.')
+          }
+          const transaction = buildTransactionFromInput(transactionData, client.getWalletAddress()) as TransactionRequest
           const payload: SendWalletTransactionPayload = {
             address: client.getWalletAddress()!,
             transactionRequest: transaction,
@@ -1134,6 +1144,7 @@ const main = async (): Promise<void> => {
             sessionStorage,
           })
           console.log(url)
+          notifyRedirect()
 
           if (argv.listen) {
             await startRedirectListener({

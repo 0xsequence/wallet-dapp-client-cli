@@ -23,8 +23,7 @@ DAPP_CLIENT_CLI_PASSPHRASE=...
 
 ### Connect (redirect + auto resume)
 ```bash
-pnpm start -- reset-pending
-pnpm start -- --listen connect --chain-id 421614
+pnpm start -- connect --chain-id 421614
 ```
 
 The CLI prints a URL, you open it, approve, then it auto-resumes via the local listener.
@@ -55,6 +54,14 @@ pnpm start -- --listen sign-message --chain-id 421614 --message "hello"
 ```bash
 pnpm start -- send-transaction --chain-id 421614 --transactions examples/mint-transaction.json
 ```
+
+### Send transaction via wallet (redirect)
+```bash
+pnpm start -- send-wallet-transaction --chain-id 421614 --transaction examples/mint-transaction.json
+```
+
+`send-wallet-transaction` accepts a single transaction object or an array.  
+If you pass an array, the CLI uses the first item. `@currentWallet` is supported inside the JSON.
 
 ### Manual resume
 ```bash
@@ -95,6 +102,8 @@ Run:
 ```bash
 pnpm start -- send-transaction --chain-id 421614 --transactions examples/mint-transaction.json
 ```
+
+`send-wallet-transaction` can accept the same JSON. If you pass an array, the CLI uses the first item.
 
 ### Explorer Links
 `send-transaction` output includes `explorerUrl` when available.
