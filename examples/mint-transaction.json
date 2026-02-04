@@ -1,0 +1,8 @@
+[
+  {
+    "to": "0xD25b37E2fB07f85E9ecA9d40FE3BcF60BA2dc57b",
+    "abi": "function safeMint(address to)",
+    "args": ["@currentWallet"],
+    "value": "0"
+  }
+]
