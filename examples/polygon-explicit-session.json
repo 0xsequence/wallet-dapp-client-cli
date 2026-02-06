@@ -2,6 +2,7 @@
   "chainId": 137,
   "valueLimit": "10000000000000000000",
   "deadline": "9999999999",
+  "includeFeeOptionPermissions": true,
   "permissions": [
     {
       "target": "0x08FFc248A190E700421C0aFB4135768406dCebfF",

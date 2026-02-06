@@ -147,6 +147,11 @@ If you need fee token permissions, set:
 includeFeeOptionPermissions: true
 ```
 
+You can also set this field directly in an explicit-session JSON file passed to:
+- `connect --explicit-session @file.json`
+- `upgrade-sessionless --explicit-session @file.json`
+- `add-explicit-session --explicit-session @file.json`
+
 ## Transactions JSON
 
 `send-transaction` supports:

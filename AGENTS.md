@@ -117,6 +117,10 @@ includeFeeOptionPermissions: true
 ```
 
 This will fetch fee tokens and add transfer permissions + value forwarder permission.
+You can also set this field directly in explicit-session JSON passed to:
+- `connect --explicit-session @file.json`
+- `upgrade-sessionless --explicit-session @file.json`
+- `add-explicit-session --explicit-session @file.json`
 
 ## Transactions JSON Features
 `send-transaction` accepts JSON with:

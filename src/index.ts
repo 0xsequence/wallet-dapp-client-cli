@@ -58,6 +58,10 @@ type GlobalArgs = {
   transportMode?: string
 }
 
+type ExplicitSessionConfigInput = ExplicitSessionConfig & {
+  includeFeeOptionPermissions?: boolean
+}
+
 const printJson = (value: unknown): void => {
   console.log(JSON.stringify(value, jsonReplacers, 2))
 }
@@ -77,7 +81,7 @@ const toNumber = (value: unknown): number | undefined => {
   return undefined
 }
 
-const normalizeExplicitSessionConfig = (config: ExplicitSessionConfig): ExplicitSessionConfig => ({
+const normalizeExplicitSessionConfig = (config: ExplicitSessionConfigInput): ExplicitSessionConfigInput => ({
   ...config,
   valueLimit: toBigInt(config.valueLimit) ?? 0n,
   deadline: toBigInt(config.deadline) ?? 0n,
@@ -295,6 +299,21 @@ const buildDefaultExplicitSessionConfig = (defaults: NonNullable<typeof explicit
     deadline: BigInt(nowSeconds + expiresIn),
     permissions: defaults.permissions,
   }
+}
+
+const withOptionalFeePermissions = async (params: {
+  chainId: number
+  config: ExplicitSessionConfigInput
+  dappClient: DappClient
+}): Promise<ExplicitSessionConfig> => {
+  const { includeFeeOptionPermissions: includeFeePermissions, ...explicitSessionConfig } = params.config
+  if (!includeFeePermissions) return explicitSessionConfig
+  const permissions = await includeFeeOptionPermissions({
+    dappClient: params.dappClient,
+    chainId: params.chainId,
+    permissions: explicitSessionConfig.permissions,
+  })
+  return { ...explicitSessionConfig, permissions }
 }
 
 const prepareState = async (argv: GlobalArgs): Promise<StateManager> => {
@@ -648,7 +667,8 @@ const main = async (): Promise<void> => {
           .option('chain-id', { type: 'number', demandOption: true })
           .option('explicit-session', {
             type: 'string',
-            describe: 'Explicit session config JSON or @file (example: @examples/polygon-explicit-session.json)',
+            describe:
+              'Explicit session config JSON or @file (example: @examples/polygon-explicit-session.json). Optional: set "includeFeeOptionPermissions": true in JSON.',
           })
           .option('include-implicit', {
             type: 'boolean',
@@ -672,27 +692,30 @@ const main = async (): Promise<void> => {
           const chainId = Number(argv.chainId)
           let explicitSessionConfig: ExplicitSessionConfig | undefined
           if (argv.explicitSession) {
-            explicitSessionConfig = normalizeExplicitSessionConfig(
-              await readJsonInput<ExplicitSessionConfig>(argv.explicitSession, 'explicit session config'),
+            const configInput = normalizeExplicitSessionConfig(
+              await readJsonInput<ExplicitSessionConfigInput>(argv.explicitSession, 'explicit session config'),
             )
-            if (explicitSessionConfig.chainId !== chainId) {
+            if (configInput.chainId !== chainId) {
               throw new Error('explicit session chainId must match --chain-id')
             }
+            explicitSessionConfig = await withOptionalFeePermissions({
+              chainId,
+              config: configInput,
+              dappClient: createClient(config, storage, sessionStorage),
+            })
           } else if (explicitSessionDefaults) {
             const defaults = explicitSessionDefaults
             if (defaults.chainId !== chainId) {
               throw new Error(`default explicit session chainId (${defaults.chainId}) must match --chain-id`)
             }
-            explicitSessionConfig = buildDefaultExplicitSessionConfig(defaults)
-            if (defaults.includeFeeOptionPermissions) {
-              const client = createClient(config, storage, sessionStorage)
-              const permissions = await includeFeeOptionPermissions({
-                dappClient: client,
-                chainId,
-                permissions: explicitSessionConfig.permissions,
-              })
-              explicitSessionConfig = { ...explicitSessionConfig, permissions }
-            }
+            explicitSessionConfig = await withOptionalFeePermissions({
+              chainId,
+              config: {
+                ...buildDefaultExplicitSessionConfig(defaults),
+                includeFeeOptionPermissions: defaults.includeFeeOptionPermissions,
+              },
+              dappClient: createClient(config, storage, sessionStorage),
+            })
           }
 
           if (argv.preferredLoginMethod === 'email' && !argv.email) {
@@ -865,7 +888,7 @@ const main = async (): Promise<void> => {
           .option('chain-id', { type: 'number', demandOption: true })
           .option('explicit-session', {
             type: 'string',
-            describe: 'Explicit session config JSON or @file',
+            describe: 'Explicit session config JSON or @file. Optional: set "includeFeeOptionPermissions": true in JSON.',
           })
           .option('include-implicit', {
             type: 'boolean',
@@ -893,27 +916,30 @@ const main = async (): Promise<void> => {
           const chainId = Number(argv.chainId)
           let explicitSessionConfig: ExplicitSessionConfig | undefined
           if (argv.explicitSession) {
-            explicitSessionConfig = normalizeExplicitSessionConfig(
-              await readJsonInput<ExplicitSessionConfig>(argv.explicitSession, 'explicit session config'),
+            const configInput = normalizeExplicitSessionConfig(
+              await readJsonInput<ExplicitSessionConfigInput>(argv.explicitSession, 'explicit session config'),
             )
-            if (explicitSessionConfig.chainId !== chainId) {
+            if (configInput.chainId !== chainId) {
               throw new Error('explicit session chainId must match --chain-id')
             }
+            explicitSessionConfig = await withOptionalFeePermissions({
+              chainId,
+              config: configInput,
+              dappClient: createClient(config, storage, sessionStorage),
+            })
           } else if (explicitSessionDefaults) {
             const defaults = explicitSessionDefaults
             if (defaults.chainId !== chainId) {
               throw new Error(`default explicit session chainId (${defaults.chainId}) must match --chain-id`)
             }
-            explicitSessionConfig = buildDefaultExplicitSessionConfig(defaults)
-            if (defaults.includeFeeOptionPermissions) {
-              const client = createClient(config, storage, sessionStorage)
-              const permissions = await includeFeeOptionPermissions({
-                dappClient: client,
-                chainId,
-                permissions: explicitSessionConfig.permissions,
-              })
-              explicitSessionConfig = { ...explicitSessionConfig, permissions }
-            }
+            explicitSessionConfig = await withOptionalFeePermissions({
+              chainId,
+              config: {
+                ...buildDefaultExplicitSessionConfig(defaults),
+                includeFeeOptionPermissions: defaults.includeFeeOptionPermissions,
+              },
+              dappClient: createClient(config, storage, sessionStorage),
+            })
           }
 
           if (argv.preferredLoginMethod === 'email' && !argv.email) {
@@ -980,7 +1006,11 @@ const main = async (): Promise<void> => {
       (builder) =>
         builder
           .option('chain-id', { type: 'number', demandOption: true })
-          .option('explicit-session', { type: 'string', demandOption: true }),
+          .option('explicit-session', {
+            type: 'string',
+            demandOption: true,
+            describe: 'Explicit session config JSON or @file. Optional: set "includeFeeOptionPermissions": true in JSON.',
+          }),
       async (argv) => {
         try {
           const stateManager = await prepareState(argv)
@@ -997,12 +1027,17 @@ const main = async (): Promise<void> => {
           }
 
           const chainId = Number(argv.chainId)
-          const explicitSessionConfig = normalizeExplicitSessionConfig(
-            await readJsonInput<ExplicitSessionConfig>(argv.explicitSession, 'explicit session config'),
+          const explicitSessionConfigInput = normalizeExplicitSessionConfig(
+            await readJsonInput<ExplicitSessionConfigInput>(argv.explicitSession, 'explicit session config'),
           )
-          if (explicitSessionConfig.chainId !== chainId) {
+          if (explicitSessionConfigInput.chainId !== chainId) {
             throw new Error('explicit session chainId must match --chain-id')
           }
+          const explicitSessionConfig = await withOptionalFeePermissions({
+            chainId,
+            config: explicitSessionConfigInput,
+            dappClient: client,
+          })
 
           const tempPk = Secp256k1.randomPrivateKey()
           const sessionAddress = Address.fromPublicKey(Secp256k1.getPublicKey({ privateKey: tempPk }))
