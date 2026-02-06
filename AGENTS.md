@@ -11,15 +11,19 @@ pnpm start -- --help
 ```
 
 ### Required config
-Update `.env` (local only) or export env vars:
+Create/update `.env` (local only) or export env vars:
 
 ```
 WALLET_URL=https://v3.sequence-dev.app
+RELAYER_URL=https://dev-{network}-relayer.sequence.app
+NODES_URL=https://dev-nodes.sequence.app/{network}
 PROJECT_ACCESS_KEY=...
 ORIGIN=http://localhost:3000
 REDIRECT_PATH=/
 DAPP_CLIENT_CLI_PASSPHRASE=...
 ```
+
+Treat `.env` as required for agent-driven testing.
 
 ### Connect (redirect + auto resume)
 ```bash
@@ -27,6 +31,12 @@ pnpm start -- connect --chain-id 137
 ```
 
 The CLI auto-opens a URL, you approve, then it auto-resumes via the local listener.
+
+Do not disable normal redirect behavior for routine tests (`--listen=false`, `--open-url=false`) unless you are intentionally doing a manual fallback flow.
+
+Use minimal command style by default:
+- include only required args first
+- do not add optional flags unless the task explicitly needs them
 
 ## Usage
 
@@ -47,7 +57,7 @@ pnpm start -- disconnect --keep-sessionless false
 
 ### Sign message (redirect)
 ```bash
-pnpm start -- --listen sign-message --chain-id 137 --message "hello"
+pnpm start -- sign-message --chain-id 137 --message "hello"
 ```
 
 ### Send transaction (explicit session)
@@ -55,10 +65,11 @@ pnpm start -- --listen sign-message --chain-id 137 --message "hello"
 pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json
 ```
 
-Interactive fee option selection:
-```bash
-pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json --pick-fee-option
-```
+Mainnet behavior for `send-transaction`:
+- the CLI auto-checks fee options on mainnet chains
+- if fee options are available, it auto-selects an affordable one
+- if no options are returned (for example sponsored setup), it proceeds without fee option
+- if options exist but none are affordable, it throws an error and requires top-up or explicit `--fee-option`
 
 ### Send transaction via wallet (redirect)
 ```bash
@@ -135,5 +146,6 @@ pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-na
 ## Notes for Agents
 - This repo currently uses `@0xsequence/dapp-client` `3.0.0-beta.12` as the most recent target.
 - CLI forces `TransportMode.REDIRECT`.
+- In Codex/Claude Code sandboxed runs, use escalated permissions for redirect-required commands so browser auto-open works.
 - Avoid adding mint-specific hardcodes; keep config generic.
 - If you change command behavior, update this doc.

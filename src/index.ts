@@ -5,7 +5,6 @@ import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import http from 'node:http'
 import { execFile } from 'node:child_process'
-import readline from 'node:readline/promises'
 import { createPublicClient, http as viemHttp } from 'viem'
 
 import { AbiFunction, Address, Secp256k1 } from 'ox'
@@ -14,6 +13,7 @@ import {
   RequestActionType,
   TransportMode,
   getExplorerUrl,
+  getNetwork,
   getRpcUrl,
   jsonReplacers,
   type AddExplicitSessionPayload,
@@ -42,7 +42,7 @@ import { includeFeeOptionPermissions } from './permissions/fee-options.js'
 type GlobalArgs = {
   state?: string
   passphrase?: string
-  noPrompt?: boolean
+  prompt?: boolean
   debug?: boolean
   listen?: boolean
   listenTimeout?: number
@@ -198,55 +198,6 @@ const getFeeOptionAffordability = async (params: {
   })
 }
 
-const promptFeeOptionSelection = async (feeOptions: FeeOption[], affordability: boolean[]): Promise<FeeOption | undefined> => {
-  if (!process.stdin.isTTY || !process.stderr.isTTY) {
-    throw new Error('Interactive fee selection requires a TTY. Use --fee-option in non-interactive environments.')
-  }
-
-  if (feeOptions.length !== affordability.length) {
-    throw new Error('Internal fee option validation error.')
-  }
-
-  const defaultIndex = affordability.findIndex(Boolean)
-  if (defaultIndex === -1) {
-    throw new Error('No fee option has sufficient balance.')
-  }
-
-  process.stderr.write('Available fee options:\n')
-  feeOptions.forEach((option, index) => {
-    const marker = affordability[index] ? '' : ' [insufficient balance]'
-    process.stderr.write(`  ${index + 1}. ${describeFeeOption(option)}${marker}\n`)
-  })
-  process.stderr.write('  0. Continue without fee option\n')
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-    terminal: true,
-  })
-
-  try {
-    while (true) {
-      const answer = (await rl.question(`Select fee option [0-${feeOptions.length}] (default: ${defaultIndex + 1}): `)).trim()
-      if (!answer) return feeOptions[defaultIndex]
-
-      const selectedIndex = Number(answer)
-      if (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex <= feeOptions.length) {
-        if (selectedIndex === 0) return undefined
-        if (!affordability[selectedIndex - 1]) {
-          process.stderr.write('Selected fee option has insufficient balance. Choose another option.\n')
-          continue
-        }
-        return feeOptions[selectedIndex - 1]
-      }
-
-      process.stderr.write(`Invalid selection. Enter a number between 0 and ${feeOptions.length}.\n`)
-    }
-  } finally {
-    rl.close()
-  }
-}
-
 const resolvePlaceholders = (value: unknown, walletAddress: string | null): unknown => {
   if (typeof value === 'string') {
     if (value === '@currentWallet') {
@@ -317,13 +268,23 @@ const configOverridesFromArgs = (argv: GlobalArgs): Partial<CliConfig> => ({
 
 const ensureConfig = (config: CliConfig): CliConfig => {
   if (!config.walletUrl || !config.origin || !config.projectAccessKey) {
-    throw new Error('Missing config. Run `init` or provide walletUrl, origin, and access key.')
+    throw new Error(
+      'Missing config. Run `init`, pass wallet-url/origin/access-key, or set WALLET_URL/ORIGIN/PROJECT_ACCESS_KEY in .env.',
+    )
   }
   return config
 }
 
 const buildRedirectUrl = (origin: string, redirectPath?: string): string =>
   origin + (redirectPath ? redirectPath : '')
+
+const isMainnetChain = (chainId: number): boolean => {
+  try {
+    return getNetwork(chainId).type === 'mainnet'
+  } catch {
+    return false
+  }
+}
 
 const buildDefaultExplicitSessionConfig = (defaults: NonNullable<typeof explicitSessionDefaults>): ExplicitSessionConfig => {
   const nowSeconds = Math.floor(Date.now() / 1000)
@@ -338,9 +299,10 @@ const buildDefaultExplicitSessionConfig = (defaults: NonNullable<typeof explicit
 
 const prepareState = async (argv: GlobalArgs): Promise<StateManager> => {
   const statePath = resolveStatePath(argv.state)
+  const noPrompt = argv.prompt === false
   const passphrase = await resolvePassphrase({
     passphrase: argv.passphrase,
-    noPrompt: argv.noPrompt,
+    noPrompt,
   })
   const stateManager = new StateManager(statePath, passphrase)
   const valid = await stateManager.verifyPassphrase()
@@ -561,6 +523,18 @@ const main = async (): Promise<void> => {
   const args = rawArgs[0] === '--' ? rawArgs.slice(1) : rawArgs
   await yargs(args)
     .scriptName('dapp-client-cli')
+    .example(
+      '$0 connect --chain-id 137 --explicit-session @examples/polygon-explicit-session.json',
+      'Connect with explicit Polygon permissions from a JSON file',
+    )
+    .example(
+      '$0 send-transaction --chain-id 137 --transactions @examples/polygon-native-transfer.json',
+      'Send a Polygon native transfer using an existing session',
+    )
+    .example(
+      '$0 send-wallet-transaction --chain-id 137 --transaction @examples/polygon-native-transfer.json',
+      'Request a wallet transaction via redirect using example JSON',
+    )
     .option('state', {
       type: 'string',
       describe: 'Path to encrypted state file',
@@ -570,10 +544,10 @@ const main = async (): Promise<void> => {
       type: 'string',
       describe: 'Passphrase for encrypted state',
     })
-    .option('no-prompt', {
+    .option('prompt', {
       type: 'boolean',
-      default: false,
-      describe: 'Disable passphrase prompt',
+      default: true,
+      describe: 'Enable passphrase prompt (use --no-prompt to disable)',
     })
     .option('debug', {
       type: 'boolean',
@@ -583,12 +557,12 @@ const main = async (): Promise<void> => {
     .option('listen', {
       type: 'boolean',
       default: true,
-      describe: 'Start local redirect listener to auto-resume',
+      describe: 'Start local redirect listener to auto-resume (recommended: keep enabled)',
     })
     .option('open-url', {
       type: 'boolean',
       default: true,
-      describe: 'Automatically open redirect URL in your browser',
+      describe: 'Automatically open redirect URL in your browser (recommended: keep enabled)',
     })
     .option('show-redirect-url', {
       type: 'boolean',
@@ -674,7 +648,7 @@ const main = async (): Promise<void> => {
           .option('chain-id', { type: 'number', demandOption: true })
           .option('explicit-session', {
             type: 'string',
-            describe: 'Explicit session config JSON or @file',
+            describe: 'Explicit session config JSON or @file (example: @examples/polygon-explicit-session.json)',
           })
           .option('include-implicit', {
             type: 'boolean',
@@ -1278,7 +1252,7 @@ const main = async (): Promise<void> => {
           .option('transaction', {
             type: 'string',
             demandOption: true,
-            describe: 'Transaction JSON or @file (single object or array)',
+            describe: 'Transaction JSON or @file (single object or array, example: @examples/polygon-native-transfer.json)',
           }),
       async (argv) => {
         try {
@@ -1350,12 +1324,14 @@ const main = async (): Promise<void> => {
       (builder) =>
         builder
           .option('chain-id', { type: 'number', demandOption: true })
-          .option('transactions', { type: 'string', demandOption: true, describe: 'Transactions JSON or @file' })
-          .option('fee-option', { type: 'string', describe: 'Fee option JSON or @file' })
-          .option('pick-fee-option', {
-            type: 'boolean',
-            default: false,
-            describe: 'Interactively pick a fee option before sending',
+          .option('transactions', {
+            type: 'string',
+            demandOption: true,
+            describe: 'Transactions JSON or @file (example: @examples/polygon-native-transfer.json)',
+          })
+          .option('fee-option', {
+            type: 'string',
+            describe: 'Fee option JSON or @file (optional override; mainnet auto-selects when needed)',
           }),
       async (argv) => {
         try {
@@ -1375,29 +1351,35 @@ const main = async (): Promise<void> => {
           const walletAddress = client.getWalletAddress()
           const rawTransactions = await readJsonInput<Record<string, unknown>[]>(argv.transactions, 'transactions')
           const transactions = rawTransactions.map((tx) => buildTransactionFromInput(tx, walletAddress))
-          if (argv.feeOption && argv.pickFeeOption) {
-            throw new Error('Use either --fee-option or --pick-fee-option, not both.')
-          }
-
           let feeOption = argv.feeOption ? await readJsonInput<FeeOption>(argv.feeOption, 'fee option') : undefined
-          if (argv.pickFeeOption) {
+          if (!feeOption && isMainnetChain(chainId)) {
             const feeOptions = await waitWithIndicator('Fetching fee options', client.getFeeOptions(chainId, transactions))
             if (feeOptions.length === 0) {
-              throw new Error('No fee options returned for these transactions.')
+              console.error(
+                'No fee options returned for this mainnet transaction; proceeding without fee option (possibly sponsored).',
+              )
+            } else {
+              if (!walletAddress) {
+                throw new Error('Wallet address not available.')
+              }
+              const affordability = await waitWithIndicator(
+                'Checking fee token balances',
+                getFeeOptionAffordability({
+                  chainId,
+                  walletAddress,
+                  config,
+                  feeOptions,
+                }),
+              )
+              const selectedIndex = affordability.findIndex(Boolean)
+              if (selectedIndex === -1) {
+                throw new Error(
+                  'Mainnet transaction requires a fee token and no affordable fee option was found. Top up a supported fee token or provide --fee-option explicitly.',
+                )
+              }
+              feeOption = feeOptions[selectedIndex]
+              console.error(`Auto-selected fee option: ${describeFeeOption(feeOption)}`)
             }
-            if (!walletAddress) {
-              throw new Error('Wallet address not available.')
-            }
-            const affordability = await waitWithIndicator(
-              'Checking fee token balances',
-              getFeeOptionAffordability({
-                chainId,
-                walletAddress,
-                config,
-                feeOptions,
-              }),
-            )
-            feeOption = await promptFeeOptionSelection(feeOptions, affordability)
           }
 
           const txHash = await waitWithIndicator(
@@ -1524,6 +1506,9 @@ const main = async (): Promise<void> => {
     .demandCommand(1)
     .strict()
     .help()
+    .epilogue(
+      'Use minimal commands first (required args only). For mainnet send-transaction, the CLI auto-checks fee options: it auto-selects an affordable option when available, or proceeds without fee option when none are returned (for example sponsored setup). Redirect commands (connect/sign/resume/wallet tx) should normally run with --listen and --open-url enabled. In sandboxed agents (Codex/Claude Code), use escalated permissions so browser launch works.',
+    )
     .parseAsync()
 }
 

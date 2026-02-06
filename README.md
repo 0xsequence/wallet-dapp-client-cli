@@ -5,6 +5,18 @@ The CLI uses **redirect mode** and auto-opens redirect URLs in your browser by d
 
 ## Install
 
+### Use from npm package
+
+```bash
+npm install @0xsequence/dapp-client-cli
+npx dapp-client-cli --help
+```
+
+You do not need to run `./node_modules/.bin/dapp-client-cli ...`.
+Use `npx dapp-client-cli ...` (or npm scripts that call `dapp-client-cli`).
+
+### Local repo development
+
 ```bash
 pnpm install
 pnpm run build
@@ -12,10 +24,12 @@ pnpm run build
 
 ## Configuration
 
-Create a local `.env` (or export env vars):
+Create a local `.env` in the working directory (or export env vars):
 
 ```
 WALLET_URL=https://v3.sequence-dev.app
+RELAYER_URL=https://dev-{network}-relayer.sequence.app
+NODES_URL=https://dev-nodes.sequence.app/{network}
 PROJECT_ACCESS_KEY=...
 ORIGIN=http://localhost:3000
 REDIRECT_PATH=/
@@ -23,31 +37,53 @@ DAPP_CLIENT_CLI_PASSPHRASE=...
 ```
 
 Notes:
+- A local `.env` is strongly recommended for CLI and agent workflows.
 - `ORIGIN + REDIRECT_PATH` must be a reachable HTTP URL for redirect flows.
 - The CLI uses the passphrase to encrypt state at `~/.sequence/dapp-client-cli/state.enc`.
 
 ## Quick Start
 
 ```bash
-pnpm start -- connect --chain-id 137
+npx dapp-client-cli connect --chain-id 137
 ```
 
 By default the CLI starts a local listener and auto-opens the redirect URL in your browser. It prints a short redirect summary (instead of the full payload URL). Approve in wallet, then the CLI auto‑resumes and prints the result.
 
-To disable the listener:
+For normal runs, use minimal commands with only required args and keep defaults:
+- keep listener enabled (`--listen`)
+- keep browser auto-open enabled (`--open-url`)
+- avoid adding optional flags unless you are troubleshooting a specific issue
+
+Avoid disabling these for normal flows (`--listen=false` / `--open-url=false`), because then you must handle redirect/resume manually.
+
+### Troubleshooting Fallbacks (Only If Needed)
+
+Disable the listener:
 ```bash
-pnpm start -- --no-listen connect --chain-id 137
+npx dapp-client-cli --no-listen connect --chain-id 137
 ```
 
 To disable automatic URL opening:
 ```bash
-pnpm start -- --no-open-url connect --chain-id 137
+npx dapp-client-cli --no-open-url connect --chain-id 137
 ```
 
 To print the full redirect URL:
 ```bash
-pnpm start -- --show-redirect-url connect --chain-id 137
+npx dapp-client-cli --show-redirect-url connect --chain-id 137
 ```
+
+## Agent/Sandbox Note (Codex / Claude Code)
+
+Redirect-required commands should run with escalated permissions in sandboxed agent environments so browser launch works:
+- `connect`
+- `resume`
+- `sign-message`
+- `sign-typed-data`
+- `send-wallet-transaction`
+- `upgrade-sessionless`
+- `add-explicit-session`
+- `modify-explicit-session`
 
 ## Commands
 
@@ -71,10 +107,11 @@ pnpm start -- sign-message --chain-id 137 --message "hello"
 pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json
 ```
 
-Interactively select a fee option:
-```bash
-pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json --pick-fee-option
-```
+Mainnet behavior for `send-transaction`:
+- on mainnet chains (Ethereum, Polygon, Arbitrum One, etc.), the CLI auto-checks fee options
+- if fee options exist, it auto-selects one with sufficient balance
+- if no fee options are returned (for example sponsored setup), it proceeds without a fee option
+- if fee options exist but none are affordable, it throws a clear top-up error
 
 ### Send transaction via wallet (redirect)
 ```bash
@@ -150,3 +187,4 @@ Polygon native transfer example (for `explicitSessionDefaultsPolygonNativeWithFe
 - CLI forces `TransportMode.REDIRECT`.
 - macOS OS‑level notifications are triggered when a redirect needs user action.
   - Disable with `DAPP_CLIENT_CLI_NO_OS_NOTIFY=1`.
+- `send-transaction` handles mainnet fees automatically unless you provide `--fee-option`.
