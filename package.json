@@ -1,7 +1,7 @@
 {
-  "name": "dapp-client-cli",
-  "version": "3.0.0-beta.12",
-  "private": true,
+  "name": "@0xsequence/dapp-client-cli",
+  "version": "0.1.0",
+  "private": false,
   "type": "module",
   "bin": {
     "dapp-client-cli": "dist/index.js"
