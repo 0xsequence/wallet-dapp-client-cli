@@ -5,6 +5,8 @@ import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import http from 'node:http'
 import { execFile } from 'node:child_process'
+import readline from 'node:readline/promises'
+import { createPublicClient, http as viemHttp } from 'viem'
 
 import { AbiFunction, Address, Secp256k1 } from 'ox'
 import {
@@ -12,6 +14,7 @@ import {
   RequestActionType,
   TransportMode,
   getExplorerUrl,
+  getRpcUrl,
   jsonReplacers,
   type AddExplicitSessionPayload,
   type CreateNewSessionPayload,
@@ -43,6 +46,8 @@ type GlobalArgs = {
   debug?: boolean
   listen?: boolean
   listenTimeout?: number
+  openUrl?: boolean
+  showRedirectUrl?: boolean
   walletUrl?: string
   origin?: string
   accessKey?: string
@@ -107,6 +112,138 @@ const waitWithIndicator = async <T>(label: string, task: Promise<T>): Promise<T>
   } finally {
     clearInterval(interval)
     process.stderr.write(`\r${label} done\n`)
+  }
+}
+
+const formatFeeAmount = (value: string, decimals?: number): string => {
+  if (decimals === undefined || decimals < 0) return value
+  const amount = BigInt(value)
+  const base = 10n ** BigInt(decimals)
+  const whole = amount / base
+  const remainder = amount % base
+  if (remainder === 0n) return whole.toString()
+  const fraction = remainder.toString().padStart(decimals, '0').replace(/0+$/, '')
+  return `${whole}.${fraction}`
+}
+
+const describeFeeOption = (option: FeeOption): string => {
+  const symbol = option.token.symbol || option.token.name || 'TOKEN'
+  const amount = formatFeeAmount(option.value, option.token.decimals)
+  const tokenAddress = option.token.contractAddress ?? 'native'
+  return `${amount} ${symbol} (to ${option.to}, token ${tokenAddress}, gasLimit ${option.gasLimit})`
+}
+
+const ERC20_BALANCE_OF_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }],
+  },
+] as const
+
+const isNativeFeeOption = (option: FeeOption): boolean => {
+  const tokenAddress = option.token.contractAddress?.toLowerCase()
+  return !tokenAddress || tokenAddress === '0x0000000000000000000000000000000000000000'
+}
+
+const getFeeOptionAffordability = async (params: {
+  chainId: number
+  walletAddress: string
+  config: CliConfig
+  feeOptions: FeeOption[]
+}): Promise<boolean[]> => {
+  if (!params.config.nodesUrl || !params.config.projectAccessKey) {
+    throw new Error('Missing nodesUrl or projectAccessKey in config.')
+  }
+  const rpcUrl = getRpcUrl(params.chainId, params.config.nodesUrl, params.config.projectAccessKey)
+  const client = createPublicClient({
+    transport: viemHttp(rpcUrl),
+  })
+
+  const walletAddress = params.walletAddress as `0x${string}`
+  const tokenBalances = new Map<string, bigint>()
+
+  if (params.feeOptions.some((option) => isNativeFeeOption(option))) {
+    const nativeBalance = await client.getBalance({ address: walletAddress })
+    tokenBalances.set('native', nativeBalance)
+  }
+
+  const erc20Addresses = Array.from(
+    new Set(
+      params.feeOptions
+        .map((option) => option.token.contractAddress?.toLowerCase())
+        .filter((address): address is string => Boolean(address) && address !== '0x0000000000000000000000000000000000000000'),
+    ),
+  )
+
+  await Promise.all(
+    erc20Addresses.map(async (address) => {
+      const balance = (await client.readContract({
+        address: address as `0x${string}`,
+        abi: ERC20_BALANCE_OF_ABI,
+        functionName: 'balanceOf',
+        args: [walletAddress],
+      })) as bigint
+      tokenBalances.set(address, balance)
+    }),
+  )
+
+  return params.feeOptions.map((option) => {
+    const needed = BigInt(option.value)
+    const key = isNativeFeeOption(option) ? 'native' : option.token.contractAddress!.toLowerCase()
+    const available = tokenBalances.get(key) ?? 0n
+    return available >= needed
+  })
+}
+
+const promptFeeOptionSelection = async (feeOptions: FeeOption[], affordability: boolean[]): Promise<FeeOption | undefined> => {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) {
+    throw new Error('Interactive fee selection requires a TTY. Use --fee-option in non-interactive environments.')
+  }
+
+  if (feeOptions.length !== affordability.length) {
+    throw new Error('Internal fee option validation error.')
+  }
+
+  const defaultIndex = affordability.findIndex(Boolean)
+  if (defaultIndex === -1) {
+    throw new Error('No fee option has sufficient balance.')
+  }
+
+  process.stderr.write('Available fee options:\n')
+  feeOptions.forEach((option, index) => {
+    const marker = affordability[index] ? '' : ' [insufficient balance]'
+    process.stderr.write(`  ${index + 1}. ${describeFeeOption(option)}${marker}\n`)
+  })
+  process.stderr.write('  0. Continue without fee option\n')
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+    terminal: true,
+  })
+
+  try {
+    while (true) {
+      const answer = (await rl.question(`Select fee option [0-${feeOptions.length}] (default: ${defaultIndex + 1}): `)).trim()
+      if (!answer) return feeOptions[defaultIndex]
+
+      const selectedIndex = Number(answer)
+      if (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex <= feeOptions.length) {
+        if (selectedIndex === 0) return undefined
+        if (!affordability[selectedIndex - 1]) {
+          process.stderr.write('Selected fee option has insufficient balance. Choose another option.\n')
+          continue
+        }
+        return feeOptions[selectedIndex - 1]
+      }
+
+      process.stderr.write(`Invalid selection. Enter a number between 0 and ${feeOptions.length}.\n`)
+    }
+  } finally {
+    rl.close()
   }
 }
 
@@ -255,11 +392,42 @@ const sendOsNotification = (message: string): void => {
   execFile('osascript', ['-e', script], { timeout: 2000 }, () => {})
 }
 
-const notifyRedirect = (): void => {
+const openRedirectUrl = (url: string): void => {
+  if (process.platform !== 'darwin') return
+  if (process.env.DAPP_CLIENT_CLI_NO_AUTO_OPEN) return
+  execFile('open', [url], { timeout: 2000 }, () => {})
+}
+
+const summarizeRedirectUrl = (url: string): string => {
+  const parsed = new URL(url)
+  const id = parsed.searchParams.get('id') ?? 'n/a'
+  return `${parsed.origin}${parsed.pathname} (id=${id})`
+}
+
+const printRedirectUrl = (url: string, showFull: boolean): void => {
+  if (showFull) {
+    console.log(url)
+    return
+  }
+  console.log(`Redirect URL generated: ${summarizeRedirectUrl(url)} (use --show-redirect-url for full URL)`)
+}
+
+const notifyRedirect = (url: string, autoOpen = true, showFullUrl = false): void => {
+  if (autoOpen) {
+    openRedirectUrl(url)
+  }
   process.stderr.write('\u0007')
-  const message = 'ACTION REQUIRED: Open the redirect URL above to continue.'
+  const message = autoOpen
+    ? showFullUrl
+      ? 'ACTION REQUIRED: Continue in your browser (full redirect URL printed above).'
+      : 'ACTION REQUIRED: Continue in your browser (redirect URL generated and auto-opened).'
+    : 'ACTION REQUIRED: Open the redirect URL above to continue.'
   console.error(message)
-  sendOsNotification('Open the redirect URL in your terminal output to continue.')
+  sendOsNotification(
+    autoOpen
+      ? 'Continue in your browser to approve the request.'
+      : 'Open the redirect URL in your terminal output to continue.',
+  )
 }
 
 const tryGetExplorerUrl = (chainId: number, txHash: string): string | undefined => {
@@ -416,6 +584,16 @@ const main = async (): Promise<void> => {
       type: 'boolean',
       default: true,
       describe: 'Start local redirect listener to auto-resume',
+    })
+    .option('open-url', {
+      type: 'boolean',
+      default: true,
+      describe: 'Automatically open redirect URL in your browser',
+    })
+    .option('show-redirect-url', {
+      type: 'boolean',
+      default: false,
+      describe: 'Print full redirect URL (includes full payload)',
     })
     .option('listen-timeout', {
       type: 'number',
@@ -588,8 +766,9 @@ const main = async (): Promise<void> => {
             path: '/request/connect',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -804,8 +983,9 @@ const main = async (): Promise<void> => {
             path: '/request/connect',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -874,8 +1054,9 @@ const main = async (): Promise<void> => {
             path: '/request/connect',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -946,8 +1127,9 @@ const main = async (): Promise<void> => {
             path: '/request/modify',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -1007,8 +1189,9 @@ const main = async (): Promise<void> => {
             path: '/request/sign',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -1069,8 +1252,9 @@ const main = async (): Promise<void> => {
             path: '/request/sign',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -1143,8 +1327,9 @@ const main = async (): Promise<void> => {
             path: '/request/transaction',
             sessionStorage,
           })
-          console.log(url)
-          notifyRedirect()
+          const showFullUrl = Boolean(argv.showRedirectUrl || !argv.openUrl)
+          printRedirectUrl(url, showFullUrl)
+          notifyRedirect(url, argv.openUrl, showFullUrl)
 
           if (argv.listen) {
             await startRedirectListener({
@@ -1166,7 +1351,12 @@ const main = async (): Promise<void> => {
         builder
           .option('chain-id', { type: 'number', demandOption: true })
           .option('transactions', { type: 'string', demandOption: true, describe: 'Transactions JSON or @file' })
-          .option('fee-option', { type: 'string', describe: 'Fee option JSON or @file' }),
+          .option('fee-option', { type: 'string', describe: 'Fee option JSON or @file' })
+          .option('pick-fee-option', {
+            type: 'boolean',
+            default: false,
+            describe: 'Interactively pick a fee option before sending',
+          }),
       async (argv) => {
         try {
           const stateManager = await prepareState(argv)
@@ -1185,9 +1375,30 @@ const main = async (): Promise<void> => {
           const walletAddress = client.getWalletAddress()
           const rawTransactions = await readJsonInput<Record<string, unknown>[]>(argv.transactions, 'transactions')
           const transactions = rawTransactions.map((tx) => buildTransactionFromInput(tx, walletAddress))
-          const feeOption = argv.feeOption
-            ? (await readJsonInput<FeeOption>(argv.feeOption, 'fee option'))
-            : undefined
+          if (argv.feeOption && argv.pickFeeOption) {
+            throw new Error('Use either --fee-option or --pick-fee-option, not both.')
+          }
+
+          let feeOption = argv.feeOption ? await readJsonInput<FeeOption>(argv.feeOption, 'fee option') : undefined
+          if (argv.pickFeeOption) {
+            const feeOptions = await waitWithIndicator('Fetching fee options', client.getFeeOptions(chainId, transactions))
+            if (feeOptions.length === 0) {
+              throw new Error('No fee options returned for these transactions.')
+            }
+            if (!walletAddress) {
+              throw new Error('Wallet address not available.')
+            }
+            const affordability = await waitWithIndicator(
+              'Checking fee token balances',
+              getFeeOptionAffordability({
+                chainId,
+                walletAddress,
+                config,
+                feeOptions,
+              }),
+            )
+            feeOption = await promptFeeOptionSelection(feeOptions, affordability)
+          }
 
           const txHash = await waitWithIndicator(
             'Sending transaction',

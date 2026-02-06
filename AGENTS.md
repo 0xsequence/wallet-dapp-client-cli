@@ -1,6 +1,6 @@
 # Agent Guide (Codex / Claude / etc.)
 
-This repo is a standalone CLI wrapper around `@0xsequence/dapp-client` (v3.0.0-beta.12). It runs in **redirect mode** and prints redirect URLs instead of opening a browser. State is encrypted at rest and persisted on disk.
+This repo is a standalone CLI wrapper around `@0xsequence/dapp-client` (v3.0.0-beta.12). It runs in **redirect mode**, auto-opens redirect URLs in browser by default, and prints a short redirect summary by default (`--show-redirect-url` for full URL). State is encrypted at rest and persisted on disk.
 
 ## Quick Start
 
@@ -23,10 +23,10 @@ DAPP_CLIENT_CLI_PASSPHRASE=...
 
 ### Connect (redirect + auto resume)
 ```bash
-pnpm start -- connect --chain-id 421614
+pnpm start -- connect --chain-id 137
 ```
 
-The CLI prints a URL, you open it, approve, then it auto-resumes via the local listener.
+The CLI auto-opens a URL, you approve, then it auto-resumes via the local listener.
 
 ## Usage
 
@@ -47,21 +47,27 @@ pnpm start -- disconnect --keep-sessionless false
 
 ### Sign message (redirect)
 ```bash
-pnpm start -- --listen sign-message --chain-id 421614 --message "hello"
+pnpm start -- --listen sign-message --chain-id 137 --message "hello"
 ```
 
 ### Send transaction (explicit session)
 ```bash
-pnpm start -- send-transaction --chain-id 421614 --transactions examples/mint-transaction.json
+pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json
+```
+
+Interactive fee option selection:
+```bash
+pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json --pick-fee-option
 ```
 
 ### Send transaction via wallet (redirect)
 ```bash
-pnpm start -- send-wallet-transaction --chain-id 421614 --transaction examples/mint-transaction.json
+pnpm start -- send-wallet-transaction --chain-id 137 --transaction examples/polygon-native-transfer.json
 ```
 
 `send-wallet-transaction` accepts a single transaction object or an array.  
 If you pass an array, the CLI uses the first item. `@currentWallet` is supported inside the JSON.
+Fee option selection is handled by the wallet.
 
 ### Manual resume
 ```bash
@@ -77,10 +83,21 @@ pnpm start -- resume --url "<redirect-url>"
 - `src/explicit-session.config.ts`: default explicit session config (typed).
 - `src/permissions/*`: helpers + types for building permissions.
 - `examples/mint-transaction.json`: example transaction with ABI + `@currentWallet` placeholders.
+- `examples/polygon-native-transfer.json`: example Polygon native transfer transaction.
 
 ## Default Explicit Session (Type-Safe)
 Edit `src/explicit-session.config.ts` to set default explicit session permissions.  
 Set to `null` to disable defaults.
+
+Available presets in `src/explicit-session.config.ts`:
+- `explicitSessionDefaultsNftArbitrumSepolia` (existing)
+- `explicitSessionDefaultsPolygonNativeWithFee` (new, chain `137`)
+
+The active export is:
+```ts
+export const explicitSessionDefaults = explicitSessionDefaultsPolygonNativeWithFee
+```
+Switch it to `explicitSessionDefaultsNftArbitrumSepolia` to test Arbitrum Sepolia mint examples instead.
 
 ### Fee Option Permissions
 If you need fee token permissions:
@@ -100,7 +117,7 @@ Example: `examples/mint-transaction.json`
 
 Run:
 ```bash
-pnpm start -- send-transaction --chain-id 421614 --transactions examples/mint-transaction.json
+pnpm start -- send-transaction --chain-id 137 --transactions examples/polygon-native-transfer.json
 ```
 
 `send-wallet-transaction` can accept the same JSON. If you pass an array, the CLI uses the first item.
