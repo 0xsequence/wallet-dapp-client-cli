@@ -1366,7 +1366,7 @@ const main = async (): Promise<void> => {
           })
           .option('fee-option', {
             type: 'string',
-            describe: 'Fee option JSON or @file (optional override; mainnet auto-selects when needed)',
+            describe: 'Fee option JSON or @file (optional override; auto-selected when omitted)',
           }),
       async (argv) => {
         try {
@@ -1387,32 +1387,16 @@ const main = async (): Promise<void> => {
           const rawTransactions = await readJsonInput<Record<string, unknown>[]>(argv.transactions, 'transactions')
           const transactions = rawTransactions.map((tx) => buildTransactionFromInput(tx, walletAddress))
           let feeOption = argv.feeOption ? await readJsonInput<FeeOption>(argv.feeOption, 'fee option') : undefined
-          if (!feeOption && isMainnetChain(chainId)) {
+
+          // If no fee option was provided, try to auto-pick a sensible default.
+          // Some relayers will refuse to dispatch without a fee payment.
+          if (!feeOption) {
             const feeOptions = await waitWithIndicator('Fetching fee options', client.getFeeOptions(chainId, transactions))
             if (feeOptions.length === 0) {
-              console.error(
-                'No fee options returned for this mainnet transaction; proceeding without fee option (possibly sponsored).',
-              )
+              console.error('No fee options returned; proceeding without fee option (possibly sponsored).')
             } else {
-              if (!walletAddress) {
-                throw new Error('Wallet address not available.')
-              }
-              const affordability = await waitWithIndicator(
-                'Checking fee token balances',
-                getFeeOptionAffordability({
-                  chainId,
-                  walletAddress,
-                  config,
-                  feeOptions,
-                }),
-              )
-              const selectedIndex = affordability.findIndex(Boolean)
-              if (selectedIndex === -1) {
-                throw new Error(
-                  'Mainnet transaction requires a fee token and no affordable fee option was found. Top up a supported fee token or provide --fee-option explicitly.',
-                )
-              }
-              feeOption = feeOptions[selectedIndex]
+              // Prefer native token (POL/ETH/etc) when available, otherwise just take the first option.
+              feeOption = feeOptions.find((o) => isNativeFeeOption(o)) || feeOptions[0]
               console.error(`Auto-selected fee option: ${describeFeeOption(feeOption)}`)
             }
           }
