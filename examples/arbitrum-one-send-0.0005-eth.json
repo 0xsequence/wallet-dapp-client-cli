@@ -1,0 +1,11 @@
+[
+    {
+        "to": "0xABAAd93EeE2a569cF0632f39B10A9f5D734777ca",
+        "abi": "function forwardValue(address to, uint256 value)",
+        "args": [
+            "0xe8db071f698aBA1d60babaE8e08F5cBc28782108",
+            "500000000000000"
+        ],
+        "value": "500000000000000"
+    }
+]
