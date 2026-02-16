@@ -1,0 +1,12 @@
+{
+  "chainId": 42170,
+  "valueLimit": "1000000000000000000",
+  "deadline": "9999999999",
+  "includeFeeOptionPermissions": true,
+  "permissions": [
+    {
+      "target": "0xABAAd93EeE2a569cF0632f39B10A9f5D734777ca",
+      "rules": []
+    }
+  ]
+}
