@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
 import type {
+  ETHAuthProof,
   ExplicitSessionData,
   ImplicitSessionData,
   PendingRequestContext,
@@ -29,6 +30,7 @@ export type StorageState = {
   explicitSessions: ExplicitSessionData[]
   implicitSession: ImplicitSessionData | null
   sessionlessConnection: SessionlessConnectionData | null
+  ethAuthProof: ETHAuthProof | null
   sessionlessConnectionSnapshot: SessionlessConnectionData | null
 }
 
@@ -46,6 +48,7 @@ const DEFAULT_STORAGE_STATE: StorageState = {
   explicitSessions: [],
   implicitSession: null,
   sessionlessConnection: null,
+  ethAuthProof: null,
   sessionlessConnectionSnapshot: null,
 }
 

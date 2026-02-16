@@ -1,6 +1,7 @@
 import { Address, Hex } from 'ox'
 
 import type {
+  ETHAuthProof,
   ExplicitSessionData,
   ImplicitSessionData,
   PendingRequestContext,
@@ -18,6 +19,7 @@ const cloneStorageState = (state: StorageState): StorageState => ({
   explicitSessions: [...state.explicitSessions],
   implicitSession: state.implicitSession,
   sessionlessConnection: state.sessionlessConnection,
+  ethAuthProof: state.ethAuthProof,
   sessionlessConnectionSnapshot: state.sessionlessConnectionSnapshot,
 })
 
@@ -135,6 +137,23 @@ export class FileSequenceStorage implements SequenceStorage {
   async clearSessionlessConnection(): Promise<void> {
     await this.stateManager.update((state) => {
       state.storage.sessionlessConnection = null
+    })
+  }
+
+  async saveEthAuthProof(proof: ETHAuthProof): Promise<void> {
+    await this.stateManager.update((state) => {
+      state.storage.ethAuthProof = proof
+    })
+  }
+
+  async getEthAuthProof(): Promise<ETHAuthProof | null> {
+    const state = await this.readState()
+    return state.storage.ethAuthProof ?? null
+  }
+
+  async clearEthAuthProof(): Promise<void> {
+    await this.stateManager.update((state) => {
+      state.storage.ethAuthProof = null
     })
   }
 
