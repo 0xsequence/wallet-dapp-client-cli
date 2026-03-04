@@ -5,7 +5,7 @@ import { parseEther, parseUnits, type Address } from 'viem'
 import { createContractPermission } from './helpers.js'
 import { SEQUENCE_VALUE_FORWARDER } from './constants.js'
 
-type IncludeFeeOptionPermissionsParams = {
+export type IncludeFeeOptionPermissionsParams = {
   dappClient: DappClient
   chainId: number
   permissions: Permission.Permission[]
