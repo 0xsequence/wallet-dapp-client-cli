@@ -37,6 +37,7 @@ import { createRedirectUrl } from './redirect.js'
 import { StateManager, type CliConfig } from './state.js'
 import { FileSequenceStorage, FileSessionStorage } from './storage.js'
 import { explicitSessionDefaults } from './explicit-session.config.js'
+import { isNativeFeeOption } from './fee-utils.js'
 import { includeFeeOptionPermissions } from './permissions/fee-options.js'
 
 type GlobalArgs = {
@@ -147,10 +148,6 @@ const ERC20_BALANCE_OF_ABI = [
   },
 ] as const
 
-const isNativeFeeOption = (option: FeeOption): boolean => {
-  const tokenAddress = option.token.contractAddress?.toLowerCase()
-  return !tokenAddress || tokenAddress === '0x0000000000000000000000000000000000000000'
-}
 
 const getFeeOptionAffordability = async (params: {
   chainId: number
