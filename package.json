@@ -67,7 +67,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@0xsequence/dapp-client": "3.0.0",
+    "@0xsequence/dapp-client": "3.0.1",
     "dotenv": "^17.2.3",
     "ox": "^0.9.17",
     "undici": "^7.6.0",

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@0xsequence/dapp-client':
-        specifier: 3.0.0
-        version: 3.0.0(typescript@5.9.3)
+        specifier: 3.0.1
+        version: 3.0.1(typescript@5.9.3)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -39,20 +39,20 @@ importers:
 
 packages:
 
-  '@0xsequence/dapp-client@3.0.0':
-    resolution: {integrity: sha512-gEt7byeZ7Z23CoQ2fk8nji7IT2+KK7NiuWKe0kiaZpuyxxz0jDtcv7WOOY36v6rWi98zlcfX0VSjomZ721HG8Q==}
+  '@0xsequence/dapp-client@3.0.1':
+    resolution: {integrity: sha512-uyVzmYU2N3ayZRdFvki19OiYVHiYDBAMrt+6EE1VnG6U3oCMrRLCTof0Ez/SV/zTL2W/Y0yLUNpWgSXN1tABhw==}
 
-  '@0xsequence/guard@3.0.0':
-    resolution: {integrity: sha512-3GAC7LM/o8nesW60UmqUPfY7DFNXFKzJ8rCEbkWwpC7ugycbtHNTWJUCDnQzVqVW8TXHKOFhHyxYpLQ0w8xJLQ==}
+  '@0xsequence/guard@3.0.1':
+    resolution: {integrity: sha512-1Owxnut+3BUlYOZIG013YsMaWv5DCaxy4dYBBGtMj0O+AwXxjrK9ZTVDi5LDqk3ygQHI1feWQ9R/xg9VCLtoEQ==}
 
-  '@0xsequence/relayer@3.0.0':
-    resolution: {integrity: sha512-hMMAKGVeOqEdHO9/BqtSde1XpI6gc2V9ERXazuylYzly+eKnfLt2Ne/Tu0bGvfGgMU1+yvhGrtDabSxBRU5NMA==}
+  '@0xsequence/relayer@3.0.1':
+    resolution: {integrity: sha512-cIUFrO5cr2LKPUe2fkU/aeaJ0o6o36VAYrtQf7ZDoAVmIzLTd8ndCibnfEs48961+5tIQdtIudZu6LWWGzSQ+w==}
 
-  '@0xsequence/wallet-core@3.0.0':
-    resolution: {integrity: sha512-8A2UVY3lYPjo3/OxtVSGY4QJk34HEZKU8heMspoE563wyglwKP8Q0uxzFwQVMLc8mMV0qBIOMku3bdNEhI3FZw==}
+  '@0xsequence/wallet-core@3.0.1':
+    resolution: {integrity: sha512-Sew7gyv6oCWTKshWh0UJ/wnCmfnu82G2I931yDv/3WxRJ03v049UPu0yejasbr1BE3bYRhMiRWgdTDo7uAMGcQ==}
 
-  '@0xsequence/wallet-primitives@3.0.0':
-    resolution: {integrity: sha512-V43rz82YoRjOMRBRz8FRcXldyzdUtvhLaCwuqu2zW61SZhag/QVNEHNxGg8EGtqIt6e8xKHx8PfXPRWeUiEzpQ==}
+  '@0xsequence/wallet-primitives@3.0.1':
+    resolution: {integrity: sha512-Yt3KwJHJcgOLcLv+JvzxIlL/4IQlq5MtuidMhnwsoIxs4+RPIurqDj+OF/qDa/ZXG/WzDffVeiZcSXV86Y6G/w==}
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
@@ -219,12 +219,12 @@ packages:
 
 snapshots:
 
-  '@0xsequence/dapp-client@3.0.0(typescript@5.9.3)':
+  '@0xsequence/dapp-client@3.0.1(typescript@5.9.3)':
     dependencies:
-      '@0xsequence/guard': 3.0.0(typescript@5.9.3)
-      '@0xsequence/relayer': 3.0.0(typescript@5.9.3)
-      '@0xsequence/wallet-core': 3.0.0(typescript@5.9.3)
-      '@0xsequence/wallet-primitives': 3.0.0(typescript@5.9.3)
+      '@0xsequence/guard': 3.0.1(typescript@5.9.3)
+      '@0xsequence/relayer': 3.0.1(typescript@5.9.3)
+      '@0xsequence/wallet-core': 3.0.1(typescript@5.9.3)
+      '@0xsequence/wallet-primitives': 3.0.1(typescript@5.9.3)
       ox: 0.9.17(typescript@5.9.3)
     transitivePeerDependencies:
       - bufferutil
@@ -232,16 +232,16 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@0xsequence/guard@3.0.0(typescript@5.9.3)':
+  '@0xsequence/guard@3.0.1(typescript@5.9.3)':
     dependencies:
       ox: 0.9.17(typescript@5.9.3)
     transitivePeerDependencies:
       - typescript
       - zod
 
-  '@0xsequence/relayer@3.0.0(typescript@5.9.3)':
+  '@0xsequence/relayer@3.0.1(typescript@5.9.3)':
     dependencies:
-      '@0xsequence/wallet-primitives': 3.0.0(typescript@5.9.3)
+      '@0xsequence/wallet-primitives': 3.0.1(typescript@5.9.3)
       mipd: 0.0.7(typescript@5.9.3)
       ox: 0.9.17(typescript@5.9.3)
       viem: 2.45.1(typescript@5.9.3)
@@ -251,11 +251,11 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@0xsequence/wallet-core@3.0.0(typescript@5.9.3)':
+  '@0xsequence/wallet-core@3.0.1(typescript@5.9.3)':
     dependencies:
-      '@0xsequence/guard': 3.0.0(typescript@5.9.3)
-      '@0xsequence/relayer': 3.0.0(typescript@5.9.3)
-      '@0xsequence/wallet-primitives': 3.0.0(typescript@5.9.3)
+      '@0xsequence/guard': 3.0.1(typescript@5.9.3)
+      '@0xsequence/relayer': 3.0.1(typescript@5.9.3)
+      '@0xsequence/wallet-primitives': 3.0.1(typescript@5.9.3)
       mipd: 0.0.7(typescript@5.9.3)
       ox: 0.9.17(typescript@5.9.3)
       viem: 2.45.1(typescript@5.9.3)
@@ -265,7 +265,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@0xsequence/wallet-primitives@3.0.0(typescript@5.9.3)':
+  '@0xsequence/wallet-primitives@3.0.1(typescript@5.9.3)':
     dependencies:
       ox: 0.9.17(typescript@5.9.3)
     transitivePeerDependencies:
