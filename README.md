@@ -1,6 +1,6 @@
 # dapp-client-cli
 
-A standalone CLI wrapper around `@0xsequence/dapp-client` (v3.0.0-beta.12).  
+A standalone CLI wrapper around `@0xsequence/dapp-client`
 The CLI uses **redirect mode** and auto-opens redirect URLs in your browser by default. It prints a short redirect summary by default (full URL is optional). State is encrypted at rest and persisted on disk.
 
 ## Install
